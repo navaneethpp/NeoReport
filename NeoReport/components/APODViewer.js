@@ -13,6 +13,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 
 import { getAPOD } from "../services/APOD";
 import BorderedIconButtonClassic from "./buttons/BorderedIconButtonClassic";
+import shareUtils from "../utils/shareUtils";
 
 const APODViewer = () => {
   const [apod, setApod] = useState(null);
@@ -21,6 +22,7 @@ const APODViewer = () => {
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState();
   const [zoomValue, setZoomValue] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
 
   const showDatePicker = () => setDatePickerVisible(true);
   const hideDatePicker = () => setDatePickerVisible(false);
@@ -35,6 +37,25 @@ const APODViewer = () => {
     setSelectedDate(date.toISOString().split("T")[0]);
     hideDatePicker();
   };
+
+  const shareButtonHandler = async (apod) => {
+    try {
+      setIsFocused(true);
+
+      await shareUtils(apod);
+    } catch (error) {
+      console.error("Sharing failed:", error);
+      Alert.alert("Error", "Failed to share APOD");
+    } finally {
+      setIsFocused(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isFocused) {
+      <ActivityIndicator />;
+    }
+  }, [isFocused]);
 
   useEffect(() => {
     const today = new Date();
@@ -75,19 +96,36 @@ const APODViewer = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {isFocused && (
+        <ActivityIndicator
+          style={{
+            position: "absolute",
+          }}
+          size={"large"}
+        />
+      )}
       <View style={styles.TopBar}>
         <BorderedIconButtonClassic
           buttonTitle={selectedDate}
           iconName="calendar-outline"
           onPress={showDatePicker}
         />
-        <View style={styles.ZoomContainer}>
-          <TouchableOpacity onPress={fontSizeIncrease}>
-            <MaterialIcons name="zoom-in" size={32} />
-          </TouchableOpacity>
+        <View style={styles.topBarRightContainer}>
+          <View style={[styles.Border, { flexDirection: "row" }]}>
+            <TouchableOpacity onPress={fontSizeIncrease}>
+              <MaterialIcons name="zoom-in" size={32} />
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={fontSizeDecrease}>
-            <MaterialIcons name="zoom-out" size={32} />
+            <TouchableOpacity onPress={fontSizeDecrease}>
+              <MaterialIcons name="zoom-out" size={32} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => shareButtonHandler(apod)}
+            style={{ justifyContent: "center", alignItems: "center" }}
+          >
+            <MaterialIcons name="share" size={32} />
           </TouchableOpacity>
         </View>
       </View>
@@ -179,7 +217,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
-  ZoomContainer: {
+  topBarRightContainer: {
     flexDirection: "row",
+    gap: 12,
+  },
+  Border: {
+    borderWidth: 2,
+    borderColor: "black",
+    borderRadius: 8,
+    padding: 4,
+    backgroundColor: "white",
   },
 });
