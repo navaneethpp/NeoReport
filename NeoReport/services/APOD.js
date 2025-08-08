@@ -17,6 +17,7 @@ export const getAPOD = async (date = "") => {
     }
 
     const response = await axios.get(BASE_URL, { params });
+
     return response.data;
   } catch (error) {
     console.error("Error Fetching APOD: ", error);
