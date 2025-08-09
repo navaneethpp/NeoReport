@@ -6,226 +6,277 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { useEffect, useState } from "react";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { MaterialIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as WebBrowser from "expo-web-browser";
 
 import { getAPOD } from "../services/APOD";
 import BorderedIconButtonClassic from "./buttons/BorderedIconButtonClassic";
 import shareUtils from "../utils/shareUtils";
+
+// Function to get NASA's current date (based on US Eastern Time)
+const getNASADate = () => {
+  // Get current UTC time
+  const nowUTC = new Date();
+
+  // Convert to US Eastern Time (handles EDT/EST offset manually as -4 hours)
+  // If you want DST handling, use luxon/dayjs timezone plugins
+  const nasaTime = new Date(nowUTC.getTime() - 4 * 60 * 60 * 1000);
+
+  return nasaTime.toISOString().split("T")[0];
+};
 
 const APODViewer = () => {
   const [apod, setApod] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isDatePickerVisible, setDatePickerVisible] = useState(false);
-  const [selectedDate, setSelectedDate] = useState();
+  const [selectedDate, setSelectedDate] = useState(getNASADate());
   const [zoomValue, setZoomValue] = useState(0);
-  const [isFocused, setIsFocused] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
-  const showDatePicker = () => setDatePickerVisible(true);
-  const hideDatePicker = () => setDatePickerVisible(false);
-
-  const fontSizeIncrease = () =>
-    setZoomValue(zoomValue < 20 ? zoomValue + 2 : zoomValue);
-
-  const fontSizeDecrease = () =>
-    setZoomValue(zoomValue >= 0 ? zoomValue - 2 : zoomValue);
-
-  const handleConfirm = (date) => {
-    setSelectedDate(date.toISOString().split("T")[0]);
-    hideDatePicker();
-  };
-
-  const shareButtonHandler = async (apod) => {
+  // Fetch APOD data (with caching and fallback for future dates)
+  const fetchAPOD = async () => {
     try {
-      setIsFocused(true);
+      setLoading(true);
+      setError(null);
 
-      await shareUtils(apod);
-    } catch (error) {
-      console.error("Sharing failed:", error);
-      Alert.alert("Error", "Failed to share APOD");
+      // If selectedDate is after NASA's current date, fallback to NASA's date
+      const nasaDate = getNASADate();
+      const finalDate =
+        new Date(selectedDate) > new Date(nasaDate) ? nasaDate : selectedDate;
+
+      // Check cache first
+      const cachedAPOD = await AsyncStorage.getItem(`apod_${finalDate}`);
+      if (cachedAPOD) {
+        setApod(JSON.parse(cachedAPOD));
+        return;
+      }
+
+      // Fetch from API
+      const data = await getAPOD(finalDate);
+      setApod(data);
+
+      // Cache the response
+      await AsyncStorage.setItem(`apod_${finalDate}`, JSON.stringify(data));
+    } catch (err) {
+      if (err.response && err.response.status === 404) {
+        setError("No APOD found for this date. Try a different one.");
+      } else {
+        setError(err.message);
+      }
+      Alert.alert("Error", "Failed to fetch APOD. Check your connection.");
     } finally {
-      setIsFocused(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (isFocused) {
-      <ActivityIndicator />;
-    }
-  }, [isFocused]);
-
-  useEffect(() => {
-    const today = new Date();
-    const formattedDate = today.toISOString().split("T")[0];
-
+  // Handle date selection
+  const handleConfirm = (date) => {
+    const formattedDate = date.toISOString().split("T")[0];
     setSelectedDate(formattedDate);
-  }, []);
+    setDatePickerVisible(false);
+  };
 
+  // Handle video APODs (open in browser)
+  const handleVideoPress = () => {
+    if (apod?.media_type === "video") {
+      WebBrowser.openBrowserAsync(apod.url);
+    }
+  };
+
+  // Share APOD
+  const handleShare = async () => {
+    if (!apod) return;
+
+    try {
+      setIsSharing(true);
+      await shareUtils(apod);
+    } catch (err) {
+      Alert.alert("Error", "Failed to share APOD.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  // Zoom controls
+  const fontSizeIncrease = () => setZoomValue((prev) => Math.min(prev + 2, 20));
+  const fontSizeDecrease = () => setZoomValue((prev) => Math.max(prev - 2, 0));
+
+  // Fetch APOD on mount or date change
   useEffect(() => {
-    const fetchApod = async () => {
-      try {
-        const data = await getAPOD((date = selectedDate));
-        setApod(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchApod();
+    fetchAPOD();
   }, [selectedDate]);
 
-  useEffect(() => {}, [zoomValue]);
-
+  // Loading state
   if (loading) {
-    return <ActivityIndicator size="large" />;
-  }
-
-  if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.error}>Error: {error}</Text>
-        <Text>Check your API Key and internet connection</Text>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+        <TouchableOpacity onPress={fetchAPOD}>
+          <Text style={styles.retry}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // No data state
+  if (!apod) {
+    return (
+      <View style={styles.center}>
+        <Text>No APOD data available.</Text>
+        <TouchableOpacity onPress={fetchAPOD}>
+          <Text style={styles.retry}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Main render
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {isFocused && (
-        <ActivityIndicator
-          style={{
-            position: "absolute",
-          }}
-          size={"large"}
-        />
-      )}
-      <View style={styles.TopBar}>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
         <BorderedIconButtonClassic
           buttonTitle={selectedDate}
           iconName="calendar-outline"
-          onPress={showDatePicker}
+          onPress={() => setDatePickerVisible(true)}
         />
-        <View style={styles.topBarRightContainer}>
-          <View style={[styles.Border, { flexDirection: "row" }]}>
-            <TouchableOpacity onPress={fontSizeIncrease}>
-              <MaterialIcons name="zoom-in" size={32} />
-            </TouchableOpacity>
-
+        <View style={styles.topBarRight}>
+          <View style={styles.zoomControls}>
             <TouchableOpacity onPress={fontSizeDecrease}>
-              <MaterialIcons name="zoom-out" size={32} />
+              <MaterialIcons name="zoom-out" size={28} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={fontSizeIncrease}>
+              <MaterialIcons name="zoom-in" size={28} />
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            onPress={() => shareButtonHandler(apod)}
-            style={{ justifyContent: "center", alignItems: "center" }}
-          >
-            <MaterialIcons name="share" size={32} />
+          <TouchableOpacity onPress={handleShare} disabled={isSharing}>
+            <MaterialIcons name="share" size={28} />
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Date Picker */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
         mode="date"
         onConfirm={handleConfirm}
-        onCancel={hideDatePicker}
-        style={{ borderWidth: 2, borderColor: "black" }}
-        date={new Date(selectedDate)}
+        onCancel={() => setDatePickerVisible(false)}
         maximumDate={new Date()}
+        date={new Date(selectedDate)}
       />
 
+      {/* APOD Content */}
       <Text style={styles.title}>{apod.title}</Text>
 
-      {
-        (apod.media_type = "image" ? (
-          <Image
-            source={{ uri: apod.url }}
-            style={styles.image}
-            resizeMode="contain"
-          />
-        ) : (
-          <Text>Today's APOD IS A Video: {apod.url}</Text>
-        ))
-      }
-      <Text
-        style={[
-          styles.explanation,
-          { fontSize: 16 + zoomValue, lineHeight: 24 + zoomValue },
-        ]}
-      >
+      {apod.media_type === "image" ? (
+        <Image
+          source={{ uri: apod.url }}
+          style={styles.image}
+          resizeMode="contain"
+        />
+      ) : (
+        <TouchableOpacity
+          onPress={handleVideoPress}
+          style={styles.videoContainer}
+        >
+          <Text style={styles.videoLink}>🎥 Watch Video (Tap to Open)</Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={[styles.explanation, { fontSize: 16 + zoomValue }]}>
         {apod.explanation}
       </Text>
+
       {apod.copyright && (
-        <Text style={styles.copyright}>©{apod.copyright}</Text>
+        <Text style={styles.copyright}>© {apod.copyright}</Text>
       )}
     </ScrollView>
   );
 };
 
-export default APODViewer;
-
+// Styles
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
+  center: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
   },
-  error: {
-    color: "red",
-    fontSize: 18,
-    marginBottom: 10,
+  container: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  topBarRight: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  zoomControls: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
   },
   title: {
-    fontSize: 34,
+    fontSize: 22,
     fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  date: {
-    fontSize: 16,
-    color: "grey",
     marginBottom: 16,
+    textAlign: "center",
   },
   image: {
     width: "100%",
     height: 300,
+    borderRadius: 8,
     marginBottom: 16,
   },
+  videoContainer: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  videoLink: {
+    color: "#0066cc",
+    fontWeight: "500",
+  },
   explanation: {
-    fontSize: 16,
-    marginBottom: 8,
+    lineHeight: 24,
+    marginBottom: 16,
     textAlign: "justify",
   },
   copyright: {
     fontStyle: "italic",
-    color: "grey",
+    color: "#666",
+    textAlign: "right",
   },
-  TopBar: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: "black",
-    borderRadius: 8,
-    marginBottom: 8,
+  error: {
+    color: "red",
+    marginBottom: 12,
   },
-  topBarRightContainer: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  Border: {
-    borderWidth: 2,
-    borderColor: "black",
-    borderRadius: 8,
-    padding: 4,
-    backgroundColor: "white",
+  retry: {
+    color: "#0066cc",
+    fontWeight: "500",
   },
 });
+
+export default APODViewer;
