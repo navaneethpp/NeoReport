@@ -1,8 +1,8 @@
 import axios from "axios";
 
-import { NASA_API_KEY } from "../config/api";
+import Constants from "expo-constants";
 
-const API_KEY = NASA_API_KEY; // https://api.nasa.gov/  - For getting a new API
+const API_KEY = Constants.expoConfig.extra.APOD; // https://api.nasa.gov/  - For getting a new API
 const BASE_URL = "https://api.nasa.gov/planetary/apod";
 
 export const getAPOD = async (date = "") => {

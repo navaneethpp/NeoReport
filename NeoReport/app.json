@@ -27,6 +27,9 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "APOD": "1tut4U8KDShitL9Z5oLplmBd1e5KtweMOW7ewMBJ"
+    }
   }
 }
