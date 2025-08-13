@@ -17,6 +17,7 @@ import * as WebBrowser from "expo-web-browser";
 import { getAPOD } from "../services/APOD";
 import BorderedIconButtonClassic from "./buttons/BorderedIconButtonClassic";
 import shareUtils from "../utils/shareUtils";
+import ImageButton from "./buttons/ImageButton";
 
 // Function to get NASA's current date (based on US Eastern Time)
 const getNASADate = () => {
@@ -191,11 +192,7 @@ const APODViewer = () => {
       <Text style={styles.title}>{apod.title}</Text>
 
       {apod.media_type === "image" ? (
-        <Image
-          source={{ uri: apod.url }}
-          style={styles.image}
-          resizeMode="contain"
-        />
+        <ImageButton image={apod.url} />
       ) : (
         <TouchableOpacity
           onPress={handleVideoPress}
@@ -205,8 +202,13 @@ const APODViewer = () => {
         </TouchableOpacity>
       )}
 
-      <Text style={[styles.explanation, { fontSize: 16 + zoomValue }]}>
-        {apod.explanation}
+      <Text
+        style={[
+          styles.explanation,
+          { fontSize: 20 + zoomValue, lineHeight: 28 + 1.5 * zoomValue },
+        ]}
+      >
+        &nbsp;&nbsp;&nbsp;&nbsp;{apod.explanation}
       </Text>
 
       {apod.copyright && (
@@ -244,16 +246,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 22,
+    fontSize: 25,
     fontWeight: "bold",
     marginBottom: 16,
     textAlign: "center",
-  },
-  image: {
-    width: "100%",
-    height: 300,
-    borderRadius: 8,
-    marginBottom: 16,
   },
   videoContainer: {
     marginBottom: 16,
@@ -267,7 +263,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   explanation: {
-    lineHeight: 24,
     marginBottom: 16,
     textAlign: "justify",
   },
