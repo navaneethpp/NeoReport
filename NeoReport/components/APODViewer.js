@@ -84,8 +84,13 @@ const APODViewer = () => {
 
   // Handle video APODs (open in browser)
   const handleVideoPress = () => {
-    if (apod?.media_type === "video") {
+    if (apod?.media_type === "video" && apod.url) {
       WebBrowser.openBrowserAsync(apod.url);
+    } else {
+      Alert.alert(
+        "Video Missing",
+        "The video is missing. Please cooperate with us."
+      );
     }
   };
 
@@ -160,10 +165,12 @@ const APODViewer = () => {
             <TouchableOpacity onPress={fontSizeDecrease}>
               <MaterialIcons name="zoom-out" size={28} />
             </TouchableOpacity>
+
             <TouchableOpacity onPress={fontSizeIncrease}>
               <MaterialIcons name="zoom-in" size={28} />
             </TouchableOpacity>
           </View>
+
           <TouchableOpacity onPress={handleShare} disabled={isSharing}>
             <MaterialIcons name="share" size={28} />
           </TouchableOpacity>
