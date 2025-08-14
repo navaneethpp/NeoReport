@@ -244,6 +244,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
+    backgroundColor: "white",
+    elevation: 8,
+    borderWidth: 4,
+    borderColor: "black",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   title: {
     fontSize: 25,
